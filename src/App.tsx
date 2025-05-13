@@ -53,6 +53,31 @@ const STORAGE_KEY = 'mad-quiz-state-v1';
 
 
 const App: React.FC = () => {
+  // --- タイマー機能 ---
+  const INITIAL_TIME = 4 * 60; // 4分（秒）
+  const [timerSeconds, setTimerSeconds] = useState<number>(INITIAL_TIME);
+  const [timerRunning, setTimerRunning] = useState<boolean>(false);
+
+  // タイマー開始（動作中でも即リセットして再スタート）
+  const handleTimerStart = () => {
+    setTimerSeconds(INITIAL_TIME);
+    setTimerRunning(false); // 一度止めてから再スタート
+    setTimeout(() => setTimerRunning(true), 0);
+  };
+
+  // カウントダウン処理
+  useEffect(() => {
+    if (!timerRunning) return;
+    if (timerSeconds === 0) {
+      setTimerRunning(false);
+      return;
+    }
+    const interval = setInterval(() => {
+      setTimerSeconds(sec => (sec > 0 ? sec - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, timerSeconds]);
+
   // 永続化
   const loadState = useCallback(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -68,8 +93,8 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, []);
 
-  // クイズ割り当てをリセットする関数
-  const resetPanelQuizzes = () => shuffle(quizzesData).slice(0, 25);
+  // クイズ割り当てをリセットする関数（順番どおり）
+  const resetPanelQuizzes = () => quizzesData.slice(0, 25);
 
   // 初期化
   const [teams, setTeams] = useState<Team[]>(() => loadState()?.teams || initialTeams);
@@ -78,7 +103,7 @@ const App: React.FC = () => {
   const [showQuiz, setShowQuiz] = useState<boolean>(false);
   const [selectedPanel, setSelectedPanel] = useState<Panel | null>(null);
   // クイズ配列（各パネルに割り当てたもの）
-  const [panelQuizzes, setPanelQuizzes] = useState<Quiz[]>(() => loadState()?.panelQuizzes || shuffle(quizzesData).slice(0, 25));
+  const [panelQuizzes, setPanelQuizzes] = useState<Quiz[]>(() => loadState()?.panelQuizzes || quizzesData.slice(0, 25));
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [isGameEnd, setIsGameEnd] = useState<boolean>(() => loadState()?.isGameEnd || false);
   const [lastAnswerCorrect, setLastAnswerCorrect] = useState<boolean|null>(null);
@@ -140,6 +165,7 @@ const App: React.FC = () => {
     setShowGameEndModal(false);
     setShowQuiz(false);
     setSelectedPanel(null);
+
     setLastAnswerCorrect(null);
     setReachShown(false);
     setIsBingoed(false);
@@ -159,29 +185,27 @@ const App: React.FC = () => {
   // 回答時
   const handleSelectAnswer = (idx: number) => {
     if (!selectedPanel) return;
-    const isCorrect = idx === quiz?.answer;
-    setLastAnswerCorrect(isCorrect);
-    // 正解なら得点加算
-    if (isCorrect) {
-      setTeams((prev) =>
-        prev.map((t, i) =>
-          i === currentTeam ? { ...t, score: t.score + selectedPanel.point } : t
-        ),
-      );
+    if (idx >= 0 && idx <= 3) {
+      // チームA〜Dボタン
+      setTeams(prev => prev.map((t, i) => i === idx ? { ...t, score: t.score + selectedPanel.point } : t));
+      setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, isAnswered: true, answeredTeamId: idx } : p));
+    } else {
+      // 不正解ボタン
+      setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, isAnswered: true, answeredTeamId: undefined } : p));
     }
-    // 正解ならパネルをクローズ、不正解なら未回答に戻す
-    setPanels((prev) =>
-      prev.map((p) => {
-        if (p.id !== selectedPanel.id) return p;
-        if (isCorrect) {
-          return { ...p, isAnswered: true, answeredTeamId: currentTeam };
-        } else {
-          return { ...p, isAnswered: false, answeredTeamId: undefined };
-        }
-      }),
-    );
+    setShowQuiz(false);
+    setSelectedPanel(null);
+
     // ビンゴ・リーチ判定（全チーム）
     setTimeout(() => {
+      // 回答直後のパネル状態を再現
+      const latestPanels = panels.map((p) =>
+        p.id === selectedPanel.id
+          ? (idx >= 0 && idx <= 3
+              ? { ...p, isAnswered: true, answeredTeamId: idx }
+              : { ...p, isAnswered: true, answeredTeamId: undefined })
+          : p
+      );
       let bingoFound = false;
       let bingoTeam: number | null = null;
       let bingoLines: number[][] = [];
@@ -189,12 +213,7 @@ const App: React.FC = () => {
       let reachLines: number[][] = [];
       for (const team of teams) {
         const { bingoLines: bLines, reachLines: rLines } = checkBingoAndReach(
-          // 回答直後の最新状態で判定
-          panels.map((p) =>
-            p.id === selectedPanel.id
-              ? (isCorrect ? { ...p, isAnswered: true, answeredTeamId: currentTeam } : { ...p, isAnswered: false, answeredTeamId: undefined })
-              : p
-          ),
+          latestPanels,
           team.id
         );
         if (!bingoFound && bLines.length > 0) {
@@ -207,27 +226,24 @@ const App: React.FC = () => {
           reachLines = rLines;
         }
       }
+      const allAnswered = latestPanels.filter((p) => p.isAnswered).length === 25;
       if (bingoFound) {
         setBingoInfo({ teamId: bingoTeam, lines: bingoLines });
         setIsBingoed(true);
         setIsGameEnd(true);
         setShowGameEndModal(false); // ビンゴ勝利時は通常終了モーダルは出さない
-        setShowQuiz(false);
-        setSelectedPanel(null);
-        return;
-      } else if (reachTeam !== null && !reachShown) {
+        return; // ビンゴ時は以降のstate更新を止める
+      } else if (reachTeam !== null && !reachShown && !allAnswered) {
         setReachInfo({ teamId: reachTeam, lines: reachLines });
         setReachShown(true);
         setTimeout(() => setReachInfo(null), 1500);
       }
-      const allAnswered = panels.filter((p) => p.id !== selectedPanel.id && p.isAnswered).length === 24;
       if (allAnswered) {
         setIsGameEnd(true);
         setShowGameEndModal(true);
-        setShowQuiz(false);
-        setSelectedPanel(null);
         return;
       }
+
       setCurrentTeam((prev) => (prev + 1) % teams.length);
       setShowQuiz(false);
       setSelectedPanel(null);
@@ -245,6 +261,20 @@ const App: React.FC = () => {
           リセット
         </button>
         <h1 className="text-3xl font-bold tracking-wider drop-shadow-lg text-white">Quiz & Bingo</h1>
+        {/* タイマー（右上） */}
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+          <span
+            className={`text-2xl font-mono bg-white bg-opacity-80 rounded px-3 py-1 shadow border border-blue-200 min-w-[90px] text-center select-none ${timerSeconds <= 120 ? 'text-red-600' : 'text-blue-700'}`}
+          >
+            {`${Math.floor(timerSeconds / 60)}:${(timerSeconds % 60).toString().padStart(2, '0')}`}
+          </span>
+          <button
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-4 rounded shadow border border-blue-700 transition"
+            onClick={handleTimerStart}
+          >
+タイマー
+          </button>
+        </div>
       </header>
       <TeamScoreBoard
         teams={teams}
@@ -257,17 +287,23 @@ const App: React.FC = () => {
         onSelectPanel={handleSelectPanel}
         teams={teams}
         teamColors={TEAM_COLORS}
+        currentTeam={currentTeam}
         bingoInfo={bingoInfo ?? undefined}
         reachInfo={isBingoed ? undefined : (() => {
-          // 全チーム分のリーチラインを常に強調
+          // 各チームの「他チームが埋めていない」リーチラインのみ抽出
           let allLines: { teamId: number; lines: number[][] }[] = [];
           teams.forEach(team => {
             const { reachLines } = checkBingoAndReach(panels, team.id);
-            if (reachLines.length > 0) {
-              allLines.push({ teamId: team.id, lines: reachLines });
+            // 他チームが正解していないリーチラインのみ
+            const validReachLines = reachLines.filter(line =>
+              line.every(idx =>
+                panels[idx].answeredTeamId === undefined || panels[idx].answeredTeamId === team.id
+              )
+            );
+            if (validReachLines.length > 0) {
+              allLines.push({ teamId: team.id, lines: validReachLines });
             }
           });
-          // PanelBoardのreachInfoは {teamId, lines}[] 形式で渡す
           return allLines.length > 0 ? allLines : undefined;
         })()}
       />
@@ -321,8 +357,11 @@ const App: React.FC = () => {
       {showQuiz && selectedPanel && quiz && (
         <QuizModal
           quiz={quiz}
+          quizNo={selectedPanel.id}
           onSelectAnswer={handleSelectAnswer}
-          onClose={() => setShowQuiz(false)}
+          onClose={() => {
+            setShowQuiz(false);
+          }}
         />
       )}
       {/* 正解・不正解のポップアップモーダル */}
