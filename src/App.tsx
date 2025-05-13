@@ -272,14 +272,16 @@ const App: React.FC = () => {
         <h1 className="text-3xl font-bold tracking-wider drop-shadow-lg text-white">Quiz & Bingo</h1>
         {/* タイマー（右上） */}
         <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
-          <span className="text-2xl font-mono bg-white bg-opacity-80 rounded px-3 py-1 shadow text-blue-700 border border-blue-200 min-w-[90px] text-center select-none">
+          <span
+            className={`text-2xl font-mono bg-white bg-opacity-80 rounded px-3 py-1 shadow border border-blue-200 min-w-[90px] text-center select-none ${timerSeconds <= 120 ? 'text-red-600' : 'text-blue-700'}`}
+          >
             {`${Math.floor(timerSeconds / 60)}:${(timerSeconds % 60).toString().padStart(2, '0')}`}
           </span>
           <button
             className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-4 rounded shadow border border-blue-700 transition"
             onClick={handleTimerStart}
           >
-            スタート
+タイマー
           </button>
         </div>
       </header>
