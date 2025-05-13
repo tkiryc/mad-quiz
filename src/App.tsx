@@ -54,7 +54,7 @@ const STORAGE_KEY = 'mad-quiz-state-v1';
 
 const App: React.FC = () => {
   // --- タイマー機能 ---
-  const INITIAL_TIME = 5 * 60; // 5分（秒）
+  const INITIAL_TIME = 4 * 60; // 4分（秒）
   const [timerSeconds, setTimerSeconds] = useState<number>(INITIAL_TIME);
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
 

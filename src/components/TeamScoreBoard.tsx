@@ -42,7 +42,7 @@ const TeamScoreBoard: React.FC<Props> = ({ teams, currentTeam, teamColors, teamT
               <span className="font-semibold text-lg">{team.name}</span>
               <span className="font-bold text-xl">{team.score}点</span>
               <span className="text-xs text-gray-700 bg-white bg-opacity-50 rounded px-1 mt-1">{rank}位</span>
-              {isActive && <span className="mt-1 text-xs font-bold text-pink-700">回答権あり</span>}
+              {isActive && <span className="mt-1 text-xs font-bold text-pink-700">優先回答権</span>}
             </div>
           );
         })}
