@@ -53,6 +53,31 @@ const STORAGE_KEY = 'mad-quiz-state-v1';
 
 
 const App: React.FC = () => {
+  // --- タイマー機能 ---
+  const INITIAL_TIME = 5 * 60; // 5分（秒）
+  const [timerSeconds, setTimerSeconds] = useState<number>(INITIAL_TIME);
+  const [timerRunning, setTimerRunning] = useState<boolean>(false);
+
+  // タイマー開始（動作中でも即リセットして再スタート）
+  const handleTimerStart = () => {
+    setTimerSeconds(INITIAL_TIME);
+    setTimerRunning(false); // 一度止めてから再スタート
+    setTimeout(() => setTimerRunning(true), 0);
+  };
+
+  // カウントダウン処理
+  useEffect(() => {
+    if (!timerRunning) return;
+    if (timerSeconds === 0) {
+      setTimerRunning(false);
+      return;
+    }
+    const interval = setInterval(() => {
+      setTimerSeconds(sec => (sec > 0 ? sec - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, timerSeconds]);
+
   // 永続化
   const loadState = useCallback(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -245,6 +270,18 @@ const App: React.FC = () => {
           リセット
         </button>
         <h1 className="text-3xl font-bold tracking-wider drop-shadow-lg text-white">Quiz & Bingo</h1>
+        {/* タイマー（右上） */}
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+          <span className="text-2xl font-mono bg-white bg-opacity-80 rounded px-3 py-1 shadow text-blue-700 border border-blue-200 min-w-[90px] text-center select-none">
+            {`${Math.floor(timerSeconds / 60)}:${(timerSeconds % 60).toString().padStart(2, '0')}`}
+          </span>
+          <button
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-4 rounded shadow border border-blue-700 transition"
+            onClick={handleTimerStart}
+          >
+            スタート
+          </button>
+        </div>
       </header>
       <TeamScoreBoard
         teams={teams}
@@ -259,15 +296,20 @@ const App: React.FC = () => {
         teamColors={TEAM_COLORS}
         bingoInfo={bingoInfo ?? undefined}
         reachInfo={isBingoed ? undefined : (() => {
-          // 全チーム分のリーチラインを常に強調
+          // 各チームの「他チームが埋めていない」リーチラインのみ抽出
           let allLines: { teamId: number; lines: number[][] }[] = [];
           teams.forEach(team => {
             const { reachLines } = checkBingoAndReach(panels, team.id);
-            if (reachLines.length > 0) {
-              allLines.push({ teamId: team.id, lines: reachLines });
+            // 他チームが正解していないリーチラインのみ
+            const validReachLines = reachLines.filter(line =>
+              line.every(idx =>
+                panels[idx].answeredTeamId === undefined || panels[idx].answeredTeamId === team.id
+              )
+            );
+            if (validReachLines.length > 0) {
+              allLines.push({ teamId: team.id, lines: validReachLines });
             }
           });
-          // PanelBoardのreachInfoは {teamId, lines}[] 形式で渡す
           return allLines.length > 0 ? allLines : undefined;
         })()}
       />

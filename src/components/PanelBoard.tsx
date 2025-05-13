@@ -39,13 +39,15 @@ const PanelBoard: React.FC<Props> = ({ panels, onSelectPanel, teams, teamColors,
                 highlight = 'reach-glow';
               }
               if (!panel.isAnswered) {
+                // 列ごとのアルファベット
+                const colAlphabet = String.fromCharCode('A'.charCodeAt(0) + row.indexOf(panel));
                 return (
                   <button
                     key={panel.id}
                     className={`bg-blue-200 text-lg font-bold rounded p-4 hover:bg-blue-400 transition h-16 flex items-center justify-center ${highlight}`}
                     onClick={() => onSelectPanel(panel)}
                   >
-                    {panel.point}
+                    {`${colAlphabet}-${panel.point}`}
                   </button>
                 );
               }
