@@ -6,11 +6,12 @@ type Props = {
   onSelectPanel: (panel: Panel) => void;
   teams: Team[];
   teamColors: string[];
+  currentTeam: number;
   bingoInfo?: { teamId: number; lines: number[][] } | null;
   reachInfo?: { teamId: number; lines: number[][] }[] | undefined;
 };
 
-const PanelBoard: React.FC<Props> = ({ panels, onSelectPanel, teams, teamColors, bingoInfo, reachInfo }) => {
+const PanelBoard: React.FC<Props> = ({ panels, onSelectPanel, teams, teamColors, currentTeam, bingoInfo, reachInfo }) => {
   // 5x5の行列に変換（1行5列、左から10,20,30,50,100）
   const rows = Array.from({ length: 5 }, (_, rowIdx) =>
     panels.slice(rowIdx * 5, rowIdx * 5 + 5)
@@ -54,6 +55,8 @@ const PanelBoard: React.FC<Props> = ({ panels, onSelectPanel, teams, teamColors,
               // 回答済み: 正解チーム名＋色
               const team = typeof panel.answeredTeamId === 'number' ? teams[panel.answeredTeamId] : null;
               const colorClass = typeof panel.answeredTeamId === 'number' ? teamColors[panel.answeredTeamId] : 'bg-gray-400';
+              // 優先回答権チームのパネル強調
+              const isCurrentTeam = typeof panel.answeredTeamId === 'number' && panel.answeredTeamId === currentTeam;
               return (
                 <div
                   key={panel.id}
